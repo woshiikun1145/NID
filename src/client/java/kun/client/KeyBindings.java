@@ -13,10 +13,11 @@ public class KeyBindings {
     private static KeyBinding copyKey;
 
     public static void register() {
+        // 注册热键为 N 键（无修饰键）
         copyKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.pingdisplay.copy",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_C,          // 你可以改成其他键，例如 GLFW.GLFW_KEY_K
+                GLFW.GLFW_KEY_N,
                 "category.pingdisplay"
         ));
 
@@ -28,54 +29,48 @@ public class KeyBindings {
                     return;
                 }
 
-                // 检测修饰键组合
+                // 检测是否按下了 Ctrl 键（左或右）
                 long handle = client.getWindow().getHandle();
-                boolean leftCtrlAlt = InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_LEFT_CONTROL) &&
-                        InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_LEFT_ALT);
-                boolean rightCtrlAlt = InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_RIGHT_CONTROL) &&
-                        InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_RIGHT_ALT);
+                boolean ctrlPressed = InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_LEFT_CONTROL) ||
+                        InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_RIGHT_CONTROL);
 
-                String text = null;
-                if (leftCtrlAlt) {
-                    text = CopyFormatter.formatSimple(client);
-                    System.out.println("[PingDisplay] Simple copy: " + text);
-                } else if (rightCtrlAlt) {
+                String text;
+                if (ctrlPressed) {
+                    // Ctrl + N：详细复制
                     text = CopyFormatter.formatDetailed(client);
-                    System.out.println("[PingDisplay] Detailed copy: " + text);
+                    System.out.println("[PingDisplay] Detailed copy (Ctrl+N)");
                 } else {
-                    // 可选：无修饰键时也复制简单版
+                    // 单独 N：简洁复制
                     text = CopyFormatter.formatSimple(client);
-                    System.out.println("[PingDisplay] No modifiers, simple copy: " + text);
+                    System.out.println("[PingDisplay] Simple copy (N)");
                 }
 
                 if (text != null && !text.isEmpty()) {
                     setClipboard(text);
-                    // 可选：在动作栏显示提示
-                    client.player.sendMessage(Text.literal("§a[PingDisplay] 已复制网络信息"), true);
+                    // 可选：动作栏提示
+                    if (client.player != null) {
+                        client.player.sendMessage(Text.literal("§a[PPSD] 已复制网络信息到剪贴板"), true);
+                    }
                 }
             }
         });
     }
 
-    // 双重保障的剪贴板设置方法
     private static void setClipboard(String text) {
-        // 首先尝试 Minecraft 自带剪贴板
+        // 优先使用 Minecraft 剪贴板
         try {
             MinecraftClient.getInstance().keyboard.setClipboard(text);
-            System.out.println("[PingDisplay] Copied with Minecraft clipboard");
-            return;
+            System.out.println("[PPSD] Copied with Minecraft clipboard");
         } catch (Exception e) {
-            System.out.println("[PingDisplay] Minecraft clipboard failed: " + e);
-        }
-
-        // 备用：使用 AWT 剪贴板
-        try {
-            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(new java.awt.datatransfer.StringSelection(text), null);
-            System.out.println("[PingDisplay] Copied with AWT clipboard");
-        } catch (Exception e) {
-            System.err.println("[PingDisplay] Both clipboard methods failed!");
-            e.printStackTrace();
+            System.out.println("[PPSD] Minecraft clipboard failed: " + e);
+            // 备用：AWT 剪贴板
+            try {
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(text), null);
+                System.out.println("[PPSD] Copied with AWT clipboard");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
     }
 }

@@ -8,6 +8,8 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.util.Colors;
 import org.jetbrains.annotations.NotNull;
+import kun.client.BandwidthTracker;
+
 
 @SuppressWarnings("deprecation")
 public class HudRenderer implements HudRenderCallback {
@@ -53,15 +55,25 @@ public class HudRenderer implements HudRenderCallback {
         int currentX = 5;
 
         // 绘制三个竖条，底部相对于文字基线向下偏移 BAR_Y_OFFSET
+        int barColor = getPingColor(ping);
+
         int barBottomY = textY + BAR_Y_OFFSET;
-        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_LOW);
+        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_LOW, barColor);
         currentX += BAR_WIDTH + BAR_SPACING;
-        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_MID);
+        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_MID, barColor);
         currentX += BAR_WIDTH + BAR_SPACING;
-        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_HIGH);
+        drawBar(drawContext, currentX, barBottomY, BAR_HEIGHT_HIGH, barColor);
         currentX += BAR_WIDTH + BAR_SPACING + 2;
 
         // 绘制文字
+        double uplink = BandwidthTracker.getCurrentUplink();
+        double downlink = BandwidthTracker.getCurrentDownlink();
+
+        String bandwidthText = String.format("Bandwidth: Upl: %.1f KiB/s | Dnl: %.1f KiB/s", uplink, downlink);
+        int bandwidthY = textY - client.textRenderer.fontHeight - 2;
+        drawContext.drawText(client.textRenderer, bandwidthText, 5, bandwidthY, 0xFFFFFF, true);
+
+        drawContext.drawText(tr, bandwidthText, 5, bandwidthY, Colors.WHITE, true);
         drawContext.drawText(tr, pingText, currentX, textY, pingColor, true);
         currentX += tr.getWidth(pingText) + 4;
         drawContext.drawText(tr, sprText, currentX, textY, sprColor, true);
@@ -69,21 +81,25 @@ public class HudRenderer implements HudRenderCallback {
         drawContext.drawText(tr, idText, currentX, textY, idColor, true);
     }
 
-    private void drawBar(DrawContext ctx, int x, int bottomY, int height) {
-        ctx.fill(x, bottomY - height, x + BAR_WIDTH, bottomY, Colors.WHITE);
+    private void drawBar(DrawContext ctx, int x, int bottomY, int height, int color) {
+        ctx.fill(x, bottomY - height, x + BAR_WIDTH, bottomY, color);
     }
+
+    private static final int COLOR_YELLOW = 0xFFFFD632;  // 黄色
+    private static final int COLOR_ORANGE = 0xFFFF890C;  // 橙色
+    // Colors.WHITE 和 Colors.RED 已经是正确的 ARGB 格式，无需修改
 
     private int getPingColor(int ping) {
         if (ping < PING_WHITE) return Colors.WHITE;
-        if (ping < PING_YELLOW) return 0xFFD632;
-        if (ping < PING_ORANGE) return 0xFF890C;
+        if (ping < PING_YELLOW) return COLOR_YELLOW;
+        if (ping < PING_ORANGE) return COLOR_ORANGE;
         return Colors.RED;
     }
 
     private int getSprColor(double spr) {
         if (spr <= SPR_RED) return Colors.RED;
-        if (spr <= SPR_ORANGE) return 0xFF890C;
-        if (spr <= SPR_YELLOW) return 0xFFD632;
+        if (spr <= SPR_ORANGE) return COLOR_ORANGE;
+        if (spr <= SPR_YELLOW) return COLOR_YELLOW;
         return Colors.WHITE;
     }
 

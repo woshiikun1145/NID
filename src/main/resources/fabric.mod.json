@@ -6,7 +6,7 @@
   "description": "Display your ping to the server, the server packet sending rate (SPR), and your ID in the lower-left corner in real time, and provide a quick copy function for network information.",
   "authors": [],
   "contact": {},
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "icon": "assets/ping-player-name-and-spr-display/icon.png",
   "environment": "client",
   "entrypoints": {
@@ -26,7 +26,7 @@
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
-    "fabric-api": "*",
+    "fabric-api": ">=0.130.0",
     "minecraft": "${minecraft_version}"
   }
 }

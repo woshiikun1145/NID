@@ -1,4 +1,3 @@
-// src/main/java/kun/client/PacketTracker.java
 package kun.client;
 
 import java.util.*;
@@ -11,22 +10,17 @@ public class PacketTracker {
     private static final List<PingSample> allPingHistory = new ArrayList<>();
     private static final List<SprSample> allSprHistory = new ArrayList<>();
 
-    // SPR 实时计数：最近1秒内的数据包时间戳队列
     private static final Deque<Long> packetTimestampQueue = new ConcurrentLinkedDeque<>();
     private static double currentSpr = 0.0;
     private static long lastSampleTime = 0;
     private static boolean connected = false;
 
-    public static void init() {
-        // 无需额外初始化，Mixin 会调用 onPacketReceived
-    }
+    public static void init() {}
 
-    // 由 Mixin 调用：每次收到数据包时记录
     public static void onPacketReceived() {
         if (!connected) return;
         long now = System.currentTimeMillis();
         packetTimestampQueue.add(now);
-        // 清理超过1秒的旧时间戳
         while (!packetTimestampQueue.isEmpty() && packetTimestampQueue.peekFirst() < now - 1000) {
             packetTimestampQueue.pollFirst();
         }
@@ -39,16 +33,12 @@ public class PacketTracker {
 
     public static void addSample(int ping, double spr) {
         long now = System.currentTimeMillis();
-        PingSample pSample = new PingSample(now, ping);
-        SprSample sSample = new SprSample(now, spr);
-
-        pingHistory.add(pSample);
+        pingHistory.add(new PingSample(now, ping));
         if (pingHistory.size() > MAX_RECENT_SAMPLES) pingHistory.pollFirst();
-        sprHistory.add(sSample);
+        sprHistory.add(new SprSample(now, spr));
         if (sprHistory.size() > MAX_RECENT_SAMPLES) sprHistory.pollFirst();
-
-        allPingHistory.add(pSample);
-        allSprHistory.add(sSample);
+        allPingHistory.add(new PingSample(now, ping));
+        allSprHistory.add(new SprSample(now, spr));
     }
 
     public static void reset() {
@@ -72,60 +62,58 @@ public class PacketTracker {
         currentSpr = 0.0;
     }
 
-    public static long getLastSampleTime() {
-        return lastSampleTime;
-    }
+    public static long getLastSampleTime() { return lastSampleTime; }
+    public static void updateLastSampleTime(long time) { lastSampleTime = time; }
+    public static boolean isConnected() { return connected; }
 
-    public static void updateLastSampleTime(long time) {
-        lastSampleTime = time;
-    }
-
-    public static boolean isConnected() {
-        return connected;
-    }
-
-    // 统计辅助方法
     public static Stats calculatePingStats(Collection<PingSample> samples) {
         if (samples.isEmpty()) return new Stats(0, 0, 0);
-        int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE, sum = 0;
+        double sum = 0;
+        double min = Double.MAX_VALUE, max = Double.MIN_VALUE;
         for (PingSample s : samples) {
-            int v = s.value;
-            min = Math.min(min, v);
-            max = Math.max(max, v);
-            sum += v;
-        }
-        return new Stats(sum / (double) samples.size(), min, max);
-    }
-
-    public static Stats calculateSprStats(Collection<SprSample> samples) {
-        if (samples.isEmpty()) return new Stats(0, 0, 0);
-        double min = Double.MAX_VALUE, max = Double.MIN_VALUE, sum = 0;
-        for (SprSample s : samples) {
-            double v = s.value;
-            min = Math.min(min, v);
-            max = Math.max(max, v);
-            sum += v;
+            sum += s.value;
+            min = Math.min(min, s.value);
+            max = Math.max(max, s.value);
         }
         return new Stats(sum / samples.size(), min, max);
     }
 
-    public static Collection<PingSample> getRecentPingSamples() {
-        return pingHistory;
+    public static Stats calculateSprStats(Collection<SprSample> samples) {
+        if (samples.isEmpty()) return new Stats(0, 0, 0);
+        double sum = 0;
+        double min = Double.MAX_VALUE, max = Double.MIN_VALUE;
+        for (SprSample s : samples) {
+            sum += s.value;
+            min = Math.min(min, s.value);
+            max = Math.max(max, s.value);
+        }
+        return new Stats(sum / samples.size(), min, max);
     }
 
-    public static Collection<SprSample> getRecentSprSamples() {
-        return sprHistory;
+    public static Collection<PingSample> getRecentPingSamples() { return pingHistory; }
+    public static Collection<SprSample> getRecentSprSamples() { return sprHistory; }
+    public static List<PingSample> getAllPingSamples() { return allPingHistory; }
+    public static List<SprSample> getAllSprSamples() { return allSprHistory; }
+
+    // 获取最近 n 秒的样本（用于卡顿检测）
+    public static List<PingSample> getRecentPingSamples(int seconds) {
+        List<PingSample> result = new ArrayList<>();
+        long cutoff = System.currentTimeMillis() - seconds * 1000L;
+        for (PingSample s : pingHistory) {
+            if (s.timestamp >= cutoff) result.add(s);
+        }
+        return result;
     }
 
-    public static List<PingSample> getAllPingSamples() {
-        return allPingHistory;
+    public static List<SprSample> getRecentSprSamples(int seconds) {
+        List<SprSample> result = new ArrayList<>();
+        long cutoff = System.currentTimeMillis() - seconds * 1000L;
+        for (SprSample s : sprHistory) {
+            if (s.timestamp >= cutoff) result.add(s);
+        }
+        return result;
     }
 
-    public static List<SprSample> getAllSprSamples() {
-        return allSprHistory;
-    }
-
-    // 数据容器
     public static class PingSample {
         public final long timestamp;
         public final int value;
@@ -137,11 +125,19 @@ public class PacketTracker {
         public final double value;
         public SprSample(long ts, double v) { timestamp = ts; value = v; }
     }
+    private static final Map<UUID, Integer> playerLatencies = new HashMap<>();
 
+    public static void updatePlayerLatency(UUID playerId, int latency) {
+        if (playerId != null) {
+            playerLatencies.put(playerId, latency);
+        }
+    }
+
+    public static int getCurrentPingForPlayer(UUID playerId) {
+        return playerLatencies.getOrDefault(playerId, 0);
+    }
     public static class Stats {
-        public final double avg;
-        public final double min;
-        public final double max;
+        public final double avg, max, min;
         public Stats(double avg, double min, double max) {
             this.avg = avg;
             this.min = min;
